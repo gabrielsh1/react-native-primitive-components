@@ -1,14 +1,17 @@
 import { StyleSheet } from 'react-native';
 import type { ModalizeStyleProps } from './types';
 
+import { getHeight } from '../../global/utils/get-dimentions.util';
+
 export const styles = ({
   title,
   height,
   visible,
+  withBorder,
+  floatingMode,
   withCloseButton,
   FooterComponent,
   ajustToFullViewport,
-  ajustToContentHeight,
 }: ModalizeStyleProps) => StyleSheet.create({
   // --CONTAINERS-- //
   root: {
@@ -21,29 +24,26 @@ export const styles = ({
   },
 
   container: {
-    width: '100%',
-    height: height ? height :
-      !!ajustToFullViewport ? '100%' :
-      !!ajustToContentHeight ? undefined : 350,
-    
-    maxHeight: '100%',
+    width: !!floatingMode ? '95%' : '100%',
+    height: !!floatingMode ? '98%' : '100%',
+    maxHeight: height ? height : !!ajustToFullViewport ? (getHeight + 47) : 350,
 
+    alignSelf: 'center',
     justifyContent: 'space-between',
 
     position: 'absolute',
     zIndex: 2,
-    bottom: 0,
+    bottom: !!floatingMode ? '1%' : 0,
 
     backgroundColor: '#FFF',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: !!floatingMode ? 12 : !!withBorder ? 12 : 0,
+    borderTopRightRadius: !!floatingMode ? 12 : !!withBorder ? 12 : 0,
+    borderBottomLeftRadius: !!floatingMode ? 12 : 0,
+    borderBottomRightRadius: !!floatingMode ? 12 : 0,
   },
 
   content: {
     flex: 1,
-    position: 'relative',
-
-    // backgroundColor: 'rgba(0, 255, 0, 0.25)',
   },
 
   overlay: {
@@ -62,8 +62,6 @@ export const styles = ({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-
-    // backgroundColor: 'rgba(255, 0, 0, 0.25)',
   },
 
   floating: {
@@ -76,8 +74,6 @@ export const styles = ({
   footer: {
     width: '100%',
     padding: 16,
-
-    // backgroundColor: 'rgba(0, 0, 255, 0.25)',
   },
 
   handle: {

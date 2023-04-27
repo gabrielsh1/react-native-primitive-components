@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { View, Text, FlatList, TextInput, TouchableOpacity } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 
 import { Modalize } from '../../components/Modalize';
 
@@ -29,9 +29,19 @@ const list = [
   { id: '19' },
 ];
 
+function ModalizeHeader() {
+  return (
+    <View style={styles().modal__header}>
+      <Text style={styles().modal__headerText}>50 users online</Text>
+    </View>
+  );
+};
+
 function ModalizeContent() {
   return (
     <View style={styles().content}>
+      <TextInput placeholder="Open keyboard mode" />
+
       {Array(50)
         .fill(0)
         .map((_, i) => (
@@ -48,9 +58,9 @@ function ModalizeContent() {
 export function Home() {
   const flatListRef = useRef<FlatList>(null);
 
-  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
 
   function handleToggleModal() {
     setIsModalVisible(prev => !prev);
@@ -65,6 +75,12 @@ export function Home() {
     };
   };
 
+  useEffect(() => {
+    return () => {
+      scrollY.setValue(0);
+    };
+  }, [isModalVisible]);
+
   return (
     <View style={styles().container}>
       <TouchableOpacity
@@ -76,20 +92,20 @@ export function Home() {
       </TouchableOpacity>
 
       <Modalize
+        height={500}
         title="Modalize"
         withHeader={true}
         withCloseButton={true}
         visible={isModalVisible}
         flatListRef={flatListRef}
-        ajustToFullViewport={true}
-        onToggleModal={handleToggleModal}
-        contentStyle={{ paddingHorizontal: 16 }}
         flatListStyle={{ paddingHorizontal: 16 }}
+        onCloseModal={() => setIsModalVisible(false)}
         flatListProps={{
           data: list,
           initialNumToRender: 20,
           scrollEventThrottle: 16,
           keyExtractor: (item, index) => `item=${index}`,
+          ListHeaderComponent: <TextInput placeholder="Open keyboard mode" />,
           onScroll: Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: true,
           }),
@@ -105,7 +121,7 @@ export function Home() {
           <View>
             <TouchableOpacity
               activeOpacity={0.5}
-              onPress={() => { }}
+              onPress={() => {}}
               style={styles().button}
             >
               <Text style={styles().label}>Label</Text>
@@ -116,7 +132,7 @@ export function Home() {
           <Animated.View
             style={{
               opacity: scrollY.interpolate({
-                inputRange: [100, 200],
+                inputRange: [25, 50],
                 outputRange: [0, 1],
               }),
             }}

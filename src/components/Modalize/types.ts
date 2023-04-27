@@ -1,15 +1,19 @@
 import { ReactNode } from 'react';
-import { ViewStyle, FlatListProps, Animated } from 'react-native/types';
+import { ViewStyle, FlatListProps } from 'react-native/types';
+
+type ModalizeGestureProps = {
+  panGestureEnabled?: boolean;
+  panGestureAnimatedValue?: (gestureValue: any) => void;
+};
 
 type ModalizeCallbackProps = {
-  onOpen?: () => void;
-  onClose?: () => void;
+  onCloseModal: () => void;
   onOverlayPress?: () => void;
   onBackButtonPress?: () => void;
-  onToggleModal: () => void;
 };
 
 type ModalizeComponentProps = {
+  HeaderComponent?: ReactNode;
   FooterComponent?: ReactNode;
   FloatingComponent?: ReactNode;
 };
@@ -33,20 +37,24 @@ export type ModalizeProps = {
   children?: ReactNode;
   withHandle?: boolean;
   withHeader?: boolean;
+  withBorder?: boolean;
   contentRef?: any;
+  withOverlay?: boolean;
   flatListRef?: any;
+  floatingMode?: boolean;
   flatListProps?: FlatListProps<any>;
   withCloseButton?: boolean;
   ajustToFullViewport?: boolean;
-  ajustToContentHeight?: boolean;
-} & ModalizeCallbackProps & ModalizeComponentProps & ModalizeComponentStyleProps;
+  closeOnOverlayPress?: boolean;
+} & ModalizeGestureProps & ModalizeCallbackProps & ModalizeComponentProps & ModalizeComponentStyleProps;
 
 export type ModalizeStyleProps = {
   title?: string;
   height?: string | number;
   visible?: boolean;
+  withBorder?: boolean;
+  floatingMode?: boolean;
   withCloseButton?: boolean;
   FooterComponent?: ReactNode;
   ajustToFullViewport?: boolean;
-  ajustToContentHeight?: boolean;
 };

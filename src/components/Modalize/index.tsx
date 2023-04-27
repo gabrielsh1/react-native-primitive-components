@@ -1,17 +1,44 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { getOS } from '../../global/utils/get-os-util';
 import { Portal } from 'react-native-portalize';
 import { getHeight } from '../../global/utils/get-dimentions.util';
 import { PanGestureHandler } from 'react-native-gesture-handler';
-import { View, Text, BackHandler, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
-import Animated, { runOnJS, withDelay, withTiming, interpolate, Extrapolate, useSharedValue, useAnimatedStyle, useAnimatedGestureHandler } from 'react-native-reanimated';
+import { View, Text, BackHandler, SafeAreaView, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import Animated, { runOnJS, withDelay, withSpring, withTiming, interpolate, Extrapolate, useSharedValue, useAnimatedStyle, useAnimatedGestureHandler } from 'react-native-reanimated';
 
 import { EvilIcons } from '@expo/vector-icons';
+
+import { KeyboardClose } from '../KeyboardClose';
 
 import type { ModalizeProps } from './types';
 import { styles } from './styles';
 
 const OVERLAY_TIMING = 400;
-const TRANSLATE_Y_TIMING = 400;
+const CONTENT_TIMING = 300;
+
+function ModalSafeAreaView({ children }: any) {
+  if (getOS === 'ios') {
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        {children}
+      </SafeAreaView>
+    );
+  };
+
+  return children;
+};
+
+function PanGestureComponentEnabled({ children, onGestureEvent, panGestureEnabled }: any) {
+  if (!!panGestureEnabled) {
+    return (
+      <PanGestureHandler onGestureEvent={onGestureEvent}>
+        {children}
+      </PanGestureHandler>
+    );
+  };
+
+  return children;
+};
 
 export function Modalize({
   // --PROPS-- //
@@ -21,12 +48,15 @@ export function Modalize({
   children,
   withHandle = true,
   withHeader = false,
+  withBorder = true,
   contentRef,
+  withOverlay = true,
   flatListRef,
+  floatingMode = false,
   flatListProps,
   withCloseButton = false,
   ajustToFullViewport = false,
-  ajustToContentHeight = false,
+  closeOnOverlayPress = true,
 
   // --STYLE-- //
   rootStyle,
@@ -40,14 +70,24 @@ export function Modalize({
   containerStyle,
 
   // --COMPONENTS-- //
+  HeaderComponent,
   FooterComponent,
   FloatingComponent,
 
   // --CALLBACK-- //
-  onToggleModal,
+  onCloseModal,
+  onOverlayPress,
+  onBackButtonPress,
+
+  // --GESTURE-- //
+  panGestureEnabled = true,
+  panGestureAnimatedValue,
 }: ModalizeProps) {
+  const [renderContent, setRenderContent] = useState<boolean>(false);
+
   const modalAnimation = useSharedValue(getHeight);
   const overlayAnimation = useSharedValue(0);
+  const contentAnimation = useSharedValue(0);
 
   const modalAnimatedStyle = useAnimatedStyle(() => {
     return {
@@ -68,6 +108,12 @@ export function Modalize({
     };
   });
 
+  const contentAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: contentAnimation.value,
+    };
+  });
+
   const onGestureEvent = useAnimatedGestureHandler({
     onStart(event: any, ctx: any) {
       ctx.modalAnimation = modalAnimation.value;
@@ -75,21 +121,24 @@ export function Modalize({
     onActive(event: any, ctx: any) {
       const velocityYValue = event?.velocityY?.toFixed(0);
 
-      if (velocityYValue >= 500 && velocityYValue <= 1000) {
+      if (velocityYValue >= 1000) {
         modalAnimation.value = ctx.modalAnimation + event.translationY;
 
         return;
       };
 
       modalAnimation.value = ctx.modalAnimation + event.translationY;
+
+      runOnJS(handleGetPanGestureValue)(ctx.modalAnimation + event.translationY);
     },
-    onEnd(event: any) {
+    onEnd(event: any, ctx) {
       const velocityYValue = event?.velocityY?.toFixed(0);
       const translationYValue = event?.translationY?.toFixed(0);
 
       if (velocityYValue >= 1000) {
-        modalAnimation.value = withTiming(getHeight + 256, {
-          duration: 700,
+        modalAnimation.value = withSpring(getHeight + 256, {
+          stiffness: 256,
+          damping: 124,
         });
 
         overlayAnimation.value = withDelay(350, withTiming(0, {
@@ -102,8 +151,9 @@ export function Modalize({
       };
 
       if (translationYValue >= 200) {
-        modalAnimation.value = withTiming(getHeight + 256, {
-          duration: 700,
+        modalAnimation.value = withSpring(getHeight + 256, {
+          stiffness: 256,
+          damping: 124,
         });
 
         overlayAnimation.value = withDelay(350, withTiming(0, {
@@ -115,8 +165,9 @@ export function Modalize({
         return;
       };
 
-      modalAnimation.value = withTiming(0, {
-        duration: TRANSLATE_Y_TIMING,
+      modalAnimation.value = withSpring(0, {
+        stiffness: 360,
+        damping: 300,
       });
     },
   });
@@ -127,9 +178,17 @@ export function Modalize({
       duration: OVERLAY_TIMING,
     });
 
+    setTimeout(() => {
+      // --CONTENT-- //
+      contentAnimation.value = withTiming(1, {
+        duration: CONTENT_TIMING,
+      });
+    }, 250);
+
     // --TRANSLATE-Y-- //
-    modalAnimation.value = withTiming(0, {
-      duration: TRANSLATE_Y_TIMING,
+    modalAnimation.value = withSpring(0, {
+      stiffness: 360,
+      damping: 300,
     });
   };
 
@@ -140,29 +199,44 @@ export function Modalize({
     });
 
     // --TRANSLATE-Y-- //
-    modalAnimation.value = withTiming(getHeight + 256, {
-      duration: TRANSLATE_Y_TIMING,
+    modalAnimation.value = withSpring(getHeight + 256, {
+      stiffness: 256,
+      damping: 124,
     });
 
-    setTimeout(() => onToggleModal(), 525);
+    setTimeout(() => onCloseModal(), 525);
+  };
+
+  function handleOnOverlayPress() {
+    if (onOverlayPress) onOverlayPress();
+
+    if (closeOnOverlayPress) handleAnimateOut();
+  };
+
+  function handleGetPanGestureValue(gestureValue: any) {
+    panGestureAnimatedValue && panGestureAnimatedValue(gestureValue);
   };
 
   function handleResetAnimationsValues() {
     modalAnimation.value = getHeight;
     overlayAnimation.value = 0;
+    contentAnimation.value = 0;
   };
 
   function handleUnmountComponentWithDelay(amount?: number) {
-    setTimeout(() => onToggleModal(), amount || 525);
+    setTimeout(() => onCloseModal(), amount || 525);
   };
 
   useEffect(() => {
     if (!!visible) {
       handleAnimateIn();
+
+      setTimeout(() => setRenderContent(true), 1);
     };
 
     // --UNMOUNT-- //
     return () => {
+      setRenderContent(false);
       handleResetAnimationsValues();
     };
   }, [visible]);
@@ -171,6 +245,8 @@ export function Modalize({
     if (!visible) return;
 
     const backAction = () => {
+      onBackButtonPress && onBackButtonPress();
+
       handleAnimateOut();
 
       return true;
@@ -183,79 +259,101 @@ export function Modalize({
 
   return !!visible ? (
     <Portal>
-      <View style={[styles({ visible }).root, rootStyle]}>
-        {/* --OVERLAY-- */}
-        <TouchableWithoutFeedback onPress={handleAnimateOut}>
-          <Animated.View style={[styles({}).overlay, overlayStyle, overlayAnimatedStyle]} />
-        </TouchableWithoutFeedback>
+      <ModalSafeAreaView>
+        <KeyboardClose keyboardVerticalOffset={-0.1}>
+          <View style={[styles({ visible }).root, rootStyle]}>
+            {/* --OVERLAY-- */}
+            {!!withOverlay && (
+              <TouchableWithoutFeedback onPress={handleOnOverlayPress}>
+                <Animated.View style={[styles({}).overlay, overlayStyle, overlayAnimatedStyle]} />
+              </TouchableWithoutFeedback>
+            )}
 
-        {/* --CONTAINER-- */}
-        <Animated.View
-          style={[
-            containerStyle,
-            modalAnimatedStyle,
-            styles({ height, ajustToFullViewport, ajustToContentHeight }).container
-          ]}
-        >
-          {/* --HANDLE-- */}
-          {withHandle && (
-            <PanGestureHandler onGestureEvent={onGestureEvent}>
-              <Animated.View style={styles({}).handle}>
-                <View style={[styles({}).handleIndicator, handleStyle]} />
-              </Animated.View>
-            </PanGestureHandler>
-          )}
-
-          {/* --HEADER-- */}
-          {withHeader && (
-            <PanGestureHandler onGestureEvent={onGestureEvent}>
-              <Animated.View style={[styles({ title, withCloseButton }).header, headerStyle]}>
-                {title && <Text style={styles({}).title}>{title}</Text>}
-
-                {withCloseButton && (
-                  <TouchableOpacity
-                    activeOpacity={0.5}
-                    onPress={handleAnimateOut}
-                    style={styles({}).closeButton}
-                  >
-                    <EvilIcons name="close" size={32} color="black" />
-                  </TouchableOpacity>
-                )}
-              </Animated.View>
-            </PanGestureHandler>
-          )}
-
-          {/* --CONTENT-- */}
-          {flatListProps ? (
-            <Animated.FlatList
-              ref={flatListRef}
-              {...flatListProps}
-              style={[flatListStyle]}
-            />
-          ) : (
-            <Animated.ScrollView
-              ref={contentRef}
-              style={[styles({}).content, contentStyle]}
+            {/* --CONTAINER-- */}
+            <Animated.View
+              style={[
+                containerStyle,
+                modalAnimatedStyle,
+                styles({ height, withBorder, floatingMode, ajustToFullViewport }).container
+              ]}
             >
-              {children}
-            </Animated.ScrollView>
-          )}
+              {/* --HANDLE-- */}
+              {withHandle && (
+                <PanGestureComponentEnabled
+                  onGestureEvent={onGestureEvent}
+                  panGestureEnabled={panGestureEnabled}
+                >
+                  <Animated.View style={styles({}).handle}>
+                    <View style={[styles({}).handleIndicator, handleStyle]} />
+                  </Animated.View>
+                </PanGestureComponentEnabled>
+              )}
 
-          {/* --FLOATING-- */}
-          {FloatingComponent && (
-            <View style={[styles({ FooterComponent }).floating, floatingStyle]}>
-              {FloatingComponent}
-            </View>
-          )}
+              {/* --HEADER-- */}
+              {withHeader && (
+                <PanGestureComponentEnabled
+                  onGestureEvent={onGestureEvent}
+                  panGestureEnabled={panGestureEnabled}
+                >
+                  {HeaderComponent ? (
+                    <Animated.View style={headerStyle}>
+                      {HeaderComponent}
+                    </Animated.View>
+                  ) : (
+                    <Animated.View style={[styles({ title, withCloseButton }).header, headerStyle]}>
+                      {title && <Text style={styles({}).title}>{title}</Text>}
 
-          {/* --FOOTER-- */}
-          {FooterComponent && (
-            <View style={[styles({}).footer, footerStyle]}>
-              {FooterComponent}
-            </View>
-          )}
-        </Animated.View>
-      </View>
+                      {withCloseButton && (
+                        <TouchableOpacity
+                          activeOpacity={0.5}
+                          onPress={handleAnimateOut}
+                          style={styles({}).closeButton}
+                        >
+                          <EvilIcons name="close" size={32} color="black" />
+                        </TouchableOpacity>
+                      )}
+                    </Animated.View>
+                  )}
+                </PanGestureComponentEnabled>
+              )}
+
+              {/* --CONTENT-- */}
+              {!!renderContent ? (
+                <>
+                  {flatListProps ? (
+                    <Animated.FlatList
+                      ref={flatListRef}
+                      {...flatListProps}
+                      style={[styles({}).content, flatListStyle, contentAnimatedStyle]}
+                    />
+                  ) : (
+                    <Animated.ScrollView
+                      ref={contentRef}
+                      style={[styles({}).content, contentStyle, contentAnimatedStyle]}
+                    >
+                      {children}
+                    </Animated.ScrollView>
+                  )}
+                </>
+              ) : <View style={styles({}).content} />}
+
+              {/* --FLOATING-- */}
+              {FloatingComponent && (
+                <View style={[styles({ FooterComponent }).floating, floatingStyle]}>
+                  {FloatingComponent}
+                </View>
+              )}
+
+              {/* --FOOTER-- */}
+              {FooterComponent && (
+                <View style={[styles({}).footer, footerStyle]}>
+                  {FooterComponent}
+                </View>
+              )}
+            </Animated.View>
+          </View>
+        </KeyboardClose>
+      </ModalSafeAreaView>
     </Portal>
   ) : null;
 };
